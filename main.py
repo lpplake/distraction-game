@@ -1,15 +1,20 @@
 import pygame
 import random
-import math
+# import math
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from ball import Ball
+# import time
+import concurrent
 
 pygame.init()
 
 SCREEN_WIDTH = 1200
 SCREEN_HEIGHT = 800
-NUM_BALLS = 10
+NUM_BALLS = 50
 MIN_RADIUS = 10
 MAX_RADIUS = 30
+GRAVITY = True
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -18,7 +23,7 @@ RED = (255, 0, 0)
 COLORS = [RED, BLUE]
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-pygame.display.set_caption("Distraction Balls Game")
+pygame.display.set_caption("Realistic Pool-Like Ball Simulation")
 
 balls = [
     Ball(
@@ -30,39 +35,67 @@ balls = [
     for _ in range(NUM_BALLS)
 ]
 
+THREAD_POOL_SIZE = 6
+ball_lock = threading.Lock()
+
 running = True
 paused = False
 
-while running:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
-        if event.type == pygame.MOUSEMOTION:
-            mouse_x, mouse_y = event.pos
-            if 0 < mouse_x < SCREEN_WIDTH and 0 < mouse_y < SCREEN_HEIGHT:
-                paused = False
-            else:
-                paused = True
+def update_ball(ball, all_balls):
+    with ball_lock:
+        ball.move()
+        for other_ball in all_balls:
+            if ball != other_ball:
+                colllide = ball.check_collision(other_ball)
+                if not colllide :
+                    ball.handle_soft_bump(other_ball)
+                
+                
 
-    if not paused:
-        screen.fill(WHITE)
-        active_balls = [ball for ball in balls if ball.radius > 0]
+def run():
+    global running, paused
 
-        if len(active_balls) <= 1:
-            running = False
-            continue
-        for i, ball in enumerate(balls):
-            ball.move()
-            for j, other in enumerate(balls):
-                if i != j and ball.radius > other.radius:
-                    ball.apply_gravity(other)
-                    if random.uniform(0, 1) < 0.01 and math.hypot(ball.x - other.x, ball.y - other.y) < (ball.radius + other.radius):
-                        ball.eat(other)
-            
-            if ball.radius > 0:
-                ball.draw(screen)
+    with ThreadPoolExecutor(max_workers=THREAD_POOL_SIZE) as executor:
+        while running:
+            if paused:
+                continue
 
-    pygame.display.flip()
-    pygame.time.delay(20)
+            screen.fill(WHITE)
 
-pygame.quit()
+            futures = [executor.submit(update_ball, ball, balls) for ball in balls]
+
+            concurrent.futures.wait(futures)
+
+            with ball_lock:
+                for ball in balls:
+                    ball.draw(screen)
+
+            pygame.display.flip()
+            pygame.time.delay(10)
+
+        executor.shutdown(wait=True)
+
+    print("Simulation thread terminated.")
+
+def main():
+    global running, paused
+
+    simulation_thread = threading.Thread(target=run)
+    simulation_thread.start()
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.MOUSEMOTION:
+                mouse_x, mouse_y = event.pos
+                if 0 < mouse_x < SCREEN_WIDTH and 0 < mouse_y < SCREEN_HEIGHT:
+                    paused = False
+                else:
+                    paused = True
+
+    simulation_thread.join()
+    pygame.quit()
+
+if __name__ == "__main__":
+    main()
