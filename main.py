@@ -1,3 +1,4 @@
+import math
 import pygame
 import random
 # import math
@@ -25,15 +26,34 @@ COLORS = [RED, BLUE]
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Realistic Pool-Like Ball Simulation")
 
-balls = [
-    Ball(
-        random.randint(MAX_RADIUS, SCREEN_WIDTH - MAX_RADIUS), 
-        random.randint(MAX_RADIUS, SCREEN_HEIGHT - MAX_RADIUS), 
-        random.choice(COLORS),
-        random.randint(MIN_RADIUS, MAX_RADIUS)
-    ) 
-    for _ in range(NUM_BALLS)
-]
+def initializing(num_balls, screen_width, screen_height, min_radius, max_radius):
+    balls = []
+    while len(balls) < num_balls:
+        new_ball = Ball(
+            random.randint(max_radius, screen_width - max_radius),
+            random.randint(max_radius, screen_height - max_radius),
+            random.choice(COLORS),
+            random.randint(min_radius, max_radius)
+        )
+
+        # Check for overlaps with existing balls
+        overlap = False
+        for existing_ball in balls:
+            dx = existing_ball.x - new_ball.x
+            dy = existing_ball.y - new_ball.y
+            distance = math.sqrt(dx ** 2 + dy ** 2)
+            if distance < existing_ball.radius + new_ball.radius:
+                overlap = True
+                break
+
+        # Only add the ball if there's no overlap
+        if not overlap:
+            balls.append(new_ball)
+    
+    return balls
+
+balls = initializing(NUM_BALLS, SCREEN_WIDTH, SCREEN_HEIGHT, MIN_RADIUS, MAX_RADIUS)
+
 
 THREAD_POOL_SIZE = 6
 ball_lock = threading.Lock()
@@ -43,12 +63,13 @@ paused = False
 
 def update_ball(ball, all_balls):
     with ball_lock:
-        ball.move()
+        ball.move(all_balls)
         for other_ball in all_balls:
             if ball != other_ball:
-                colllide = ball.check_collision(other_ball)
-                if not colllide :
-                    ball.handle_soft_bump(other_ball)
+                ball.check_collision(other_ball)
+                # if collide :
+                    # ball.move(all_balls)
+
                 
                 
 
